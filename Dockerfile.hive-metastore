@@ -1,0 +1,3 @@
+FROM apache/hive:4.0.0
+
+COPY drivers/postgresql-42.5.1.jar /opt/hive/lib/postgres.jar

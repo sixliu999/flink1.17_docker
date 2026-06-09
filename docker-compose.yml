@@ -3,6 +3,7 @@ services:
   # ==================== Hadoop ====================
   hadoop-namenode:
     image: apache/hadoop:3.3.6
+    platform: linux/amd64
     container_name: hadoop-namenode
     hostname: namenode
     environment:
@@ -13,11 +14,18 @@ services:
     volumes:
       - ./hadoop/config/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml:ro
       - ./hadoop/config/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
-      - namenode_data:/opt/hadoop/data/namenode
-    command: ["hdfs", "namenode"]
+    command: >
+      bash -c "
+      if [ ! -d /opt/hadoop/data/namenode/current ]; then
+        echo 'Formatting namenode...';
+        hdfs namenode -format -force;
+      fi;
+      exec hdfs namenode
+      "
 
   hadoop-datanode:
     image: apache/hadoop:3.3.6
+    platform: linux/amd64
     container_name: hadoop-datanode
     hostname: hadoop-datanode
     environment:
@@ -28,7 +36,6 @@ services:
     volumes:
       - ./hadoop/config/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml:ro
       - ./hadoop/config/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
-      - datanode_data:/opt/hadoop/data/datanode
     command: ["hdfs", "datanode"]
 
   # ==================== Zookeeper + Kafka ====================
