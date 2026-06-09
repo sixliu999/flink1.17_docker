@@ -1,0 +1,135 @@
+services:
+
+  # ==================== Hadoop ====================
+  hadoop-namenode:
+    image: apache/hadoop:3.3.6
+    container_name: hadoop-namenode
+    hostname: namenode
+    environment:
+      - HADOOP_HOME=/opt/hadoop
+    ports:
+      - "9870:9870"   # Web UI
+      - "9872:9000"   # RPC
+    volumes:
+      - ./hadoop/config/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml:ro
+      - ./hadoop/config/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
+      - namenode_data:/opt/hadoop/data/namenode
+    command: ["hdfs", "namenode"]
+
+  hadoop-datanode:
+    image: apache/hadoop:3.3.6
+    container_name: hadoop-datanode
+    hostname: hadoop-datanode
+    environment:
+      - HADOOP_HOME=/opt/hadoop
+    ports:
+      - "9864:9864"   # Web UI
+      - "9866:9866"   # Data transfer
+    volumes:
+      - ./hadoop/config/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml:ro
+      - ./hadoop/config/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
+      - datanode_data:/opt/hadoop/data/datanode
+    command: ["hdfs", "datanode"]
+
+  # ==================== Zookeeper + Kafka ====================
+  zookeeper:
+    image: bitnami/zookeeper:3.9
+    container_name: zookeeper
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_CFG_BROKER_ID=1
+      - KAFKA_CFG_LISTENERS=INTERNAL://:9092,EXTERNAL://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://kafka:9092,EXTERNAL://localhost:9094
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=INTERNAL
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+
+  # ==================== Postgres + Hive ====================
+  postgres:
+    image: postgres:13
+    container_name: hive-postgres
+    environment:
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive
+      POSTGRES_DB: metastore
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  hive-metastore:
+    image: apache/hive:4.0.0
+    container_name: hive-metastore
+    depends_on:
+      - postgres
+    environment:
+      SERVICE_NAME: metastore
+      DB_DRIVER: postgres
+      SERVICE_OPTS: >
+        -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://postgres:5432/metastore
+        -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver
+        -Djavax.jdo.option.ConnectionUserName=hive
+        -Djavax.jdo.option.ConnectionPassword=hive
+    ports:
+      - "9083:9083"
+
+  hive-server:
+    image: apache/hive:4.0.0
+    container_name: hive-server
+    depends_on:
+      - hive-metastore
+    environment:
+      SERVICE_NAME: hiveserver2
+      DB_DRIVER: postgres
+      SERVICE_OPTS: >
+        -Dhive.metastore.uris=thrift://hive-metastore:9083
+    ports:
+      - "10000:10000"
+      - "10002:10002"
+
+  # ==================== Flink ====================
+  flink-jobmanager:
+    image: flink:1.17.1
+    container_name: flink-jobmanager
+    hostname: flink-jobmanager
+    ports:
+      - "8881:8081"   # Flink Web UI
+    volumes:
+      - ./flink-lib:/opt/flink/hadoop-lib:rw
+      - ./hadoop-conf:/opt/flink/hadoop-conf:rw
+      - ./jars:/opt/flink/usrlib:rw
+      - ./jobs:/opt/flink/jobs:rw
+    entrypoint: >
+      bash -c "cp /opt/flink/hadoop-lib/*.jar /opt/flink/lib/ 2>/dev/null;
+      exec /docker-entrypoint.sh jobmanager"
+
+  flink-taskmanager:
+    image: flink:1.17.1
+    container_name: flink-taskmanager
+    depends_on:
+      - flink-jobmanager
+    volumes:
+      - ./flink-lib:/opt/flink/hadoop-lib:rw
+      - ./hadoop-conf:/opt/flink/hadoop-conf:rw
+      - ./jars:/opt/flink/usrlib:rw
+      - ./jobs:/opt/flink/jobs:rw
+    entrypoint: >
+      bash -c "cp /opt/flink/hadoop-lib/*.jar /opt/flink/lib/ 2>/dev/null;
+      exec /docker-entrypoint.sh taskmanager"
+
+volumes:
+  postgres_data:
+  namenode_data:
+  datanode_data:

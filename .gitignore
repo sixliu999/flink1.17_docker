@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+
+# Hadoop runtime data
+hadoop/namenode/current/
+hadoop/namenode/in_use.lock
+hadoop/datanode/current/
+hadoop/datanode/in_use.lock
+
+# Jar files (too large for GitHub)
+*.jar
+
+# Backup
+flink-lib-backup/
